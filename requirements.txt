@@ -1,3 +1,4 @@
-discord
-art
+discord.py
 emoji
+Pillow
+requests

@@ -14,17 +14,12 @@ from datetime import datetime, timezone
 
 TOKEN = os.getenv("TOKEN")
 
-# Owner
 OWNER_ID = 761892443427176478
-
-# Test server
 SERVER_ID = 1536080830680793140
 
-# Ticket system
 CATEGORY_ID = 1538465258367090688
 LOG_CHANNEL_ID = 1536495698785210518
 
-# Support roles
 SUPPORT_ROLE_IDS = [
     1538464963515908136,
     1538651115745443961,
@@ -33,11 +28,33 @@ SUPPORT_ROLE_IDS = [
     1538651253582729327
 ]
 
-# Optional images
-# ضع رابط الصورة هنا إذا أردت.
-# اتركها None إذا ما عندك صورة حالياً.
-PANEL_IMAGE_URL = None
-TICKET_IMAGE_URL = None
+
+# =========================================================
+# IMAGES
+# =========================================================
+
+# صورة الـSetup
+PANEL_IMAGE_URL = (
+    "https://cdn.discordapp.com/attachments/"
+    "1535099454690955276/1538472641311154196/"
+    "r7l_Cc_.png"
+    "?ex=6a83768d&is=6a82250d&"
+    "hm=8756e8902ef53b60d45c927b1816ba60a8f8202ff294a8b955ceffbdc3dfdfc2"
+)
+
+# الصورة داخل التكت
+TICKET_IMAGE_URL = (
+    "https://cdn.discordapp.com/attachments/"
+    "1538662158613745785/1538667021040881704/"
+    "asd.png"
+    "?ex=6a8382d4&is=6a823154&"
+    "hm=4f17e0415ac169cff6678786b0e22a60bb75242fa195d643132433567e161368"
+)
+
+# صورة اللوقات
+# استخدمنا صورة الـSetup مؤقتًا
+LOG_IMAGE_URL = PANEL_IMAGE_URL
+
 
 DB_FILE = "r7l_system.db"
 
@@ -188,7 +205,6 @@ def get_next_number(guild_id):
             """,
             (guild_id, number)
         )
-
     else:
         number = row["number"] + 1
 
@@ -302,6 +318,15 @@ async def send_log(
             value=value,
             inline=inline
         )
+
+    if LOG_IMAGE_URL:
+        embed.set_thumbnail(
+            url=LOG_IMAGE_URL
+        )
+
+    embed.set_footer(
+        text="R7L System"
+    )
 
     embed.timestamp = datetime.now(
         timezone.utc
@@ -601,9 +626,13 @@ class RatingModal(
             ]
         )
 
-        channel = guild.get_channel(
-            self.channel_id
-        ) if guild else None
+        channel = (
+            guild.get_channel(
+                self.channel_id
+            )
+            if guild
+            else None
+        )
 
         if channel:
             try:
@@ -1267,6 +1296,7 @@ def form_review_embed(
     )
 
     if title == "شكوى":
+
         e.add_field(
             name="على من الشكوى؟",
             value=data["target"],
@@ -1286,6 +1316,7 @@ def form_review_embed(
         )
 
     else:
+
         e.add_field(
             name="اسم السيرفر",
             value=data["server_name"],
@@ -1344,11 +1375,13 @@ class FormConfirmView(
         )
 
         if existing:
+
             channel = interaction.guild.get_channel(
                 existing["channel_id"]
             )
 
             if channel:
+
                 return await interaction.response.edit_message(
                     content=f"لديك تكت مفتوح بالفعل: {channel.mention}",
                     embed=None,
@@ -1366,11 +1399,14 @@ class FormConfirmView(
         )
 
         if channel:
+
             await interaction.followup.send(
                 f"تم إنشاء التكت: {channel.mention}",
                 ephemeral=True
             )
+
         else:
+
             await interaction.followup.send(
                 "تعذر إنشاء التكت. تأكد من الـCategory والصلاحيات.",
                 ephemeral=True
@@ -1386,11 +1422,13 @@ class FormConfirmView(
         button
     ):
         if self.ticket_type == "complaint":
+
             await interaction.response.send_modal(
                 ComplaintModal()
             )
 
         else:
+
             await interaction.response.send_modal(
                 PartnershipModal()
             )
@@ -1405,6 +1443,7 @@ class TicketSelect(
 ):
 
     def __init__(self):
+
         options = [
             discord.SelectOption(
                 label="دعم واستفسار",
@@ -1439,11 +1478,13 @@ class TicketSelect(
         )
 
         if existing:
+
             channel = interaction.guild.get_channel(
                 existing["channel_id"]
             )
 
             if channel:
+
                 return await interaction.response.send_message(
                     f"لديك تكت مفتوح بالفعل: {channel.mention}",
                     ephemeral=True
@@ -1458,6 +1499,7 @@ class TicketSelect(
         selected = self.values[0]
 
         if selected == "support":
+
             await interaction.response.defer(
                 ephemeral=True
             )
@@ -1468,6 +1510,7 @@ class TicketSelect(
             )
 
             if channel:
+
                 await interaction.followup.send(
                     f"تم إنشاء التكت: {channel.mention}",
                     ephemeral=True
@@ -1476,11 +1519,13 @@ class TicketSelect(
             return
 
         if selected == "complaint":
+
             return await interaction.response.send_modal(
                 ComplaintModal()
             )
 
         if selected == "partnership":
+
             return await interaction.response.send_modal(
                 PartnershipModal()
             )
@@ -1491,6 +1536,7 @@ class TicketPanelView(
 ):
 
     def __init__(self):
+
         super().__init__(
             timeout=None
         )
@@ -1518,6 +1564,7 @@ async def create_ticket(
     )
 
     if existing:
+
         return guild.get_channel(
             existing["channel_id"]
         )
@@ -1549,11 +1596,13 @@ async def create_ticket(
     }
 
     for role_id in SUPPORT_ROLE_IDS:
+
         role = guild.get_role(
             role_id
         )
 
         if role:
+
             overwrites[role] = (
                 discord.PermissionOverwrite(
                     view_channel=True,
@@ -1683,6 +1732,7 @@ async def create_ticket(
             )
 
     if TICKET_IMAGE_URL:
+
         e.set_image(
             url=TICKET_IMAGE_URL
         )
@@ -1738,51 +1788,28 @@ async def create_ticket(
     description="إرسال لوحة التكت"
 )
 @app_commands.describe(
-    channel="الروم الذي سترسل فيه اللوحة",
-    title="عنوان اللوحة",
-    description="وصف اللوحة",
-    image_url="رابط صورة اختياري"
+    channel="الروم الذي سترسل فيه اللوحة"
 )
 async def ticket_setup(
     interaction,
-    channel: discord.TextChannel,
-    title: str,
-    description: str,
-    image_url: str = None
+    channel: discord.TextChannel
 ):
     if interaction.user.id != OWNER_ID:
+
         return await interaction.response.send_message(
             "هذا الأمر مخصص لمالك البوت فقط.",
             ephemeral=True
         )
 
     if interaction.guild.id != SERVER_ID:
+
         return await interaction.response.send_message(
             "هذا الأمر غير متاح في هذا السيرفر.",
             ephemeral=True
         )
 
-    e = make_embed(
-        title,
-        description
-    )
-
-    final_image = (
-        image_url
-        or PANEL_IMAGE_URL
-    )
-
-    if final_image:
-        e.set_image(
-            url=final_image
-        )
-
-    e.set_footer(
-        text="R7L System"
-    )
-
     await channel.send(
-        embed=e,
+        content=PANEL_IMAGE_URL,
         view=TicketPanelView()
     )
 
@@ -1842,6 +1869,7 @@ async def on_ready():
 # =========================================================
 
 if not TOKEN:
+
     raise RuntimeError(
         "TOKEN environment variable is missing."
     )

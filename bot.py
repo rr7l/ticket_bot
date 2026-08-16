@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 
 # =========================================================
-# R7L TICKET SYSTEM V3
+# R7L TICKET SYSTEM V4
 # =========================================================
 
 TOKEN = os.getenv("TOKEN")
@@ -33,7 +33,6 @@ SUPPORT_ROLE_IDS = [
 # IMAGES
 # =========================================================
 
-# صورة الـ Setup
 PANEL_IMAGE_URL = (
     "https://cdn.discordapp.com/attachments/"
     "1535099454690955276/1538472641311154196/"
@@ -42,7 +41,6 @@ PANEL_IMAGE_URL = (
     "hm=8756e8902ef53b60d45c927b1816ba60a8f8202ff294a8b955ceffbdc3dfdfc2"
 )
 
-# الصورة داخل التكت
 TICKET_IMAGE_URL = (
     "https://cdn.discordapp.com/attachments/"
     "1538662158613745785/1538667021040881704/"
@@ -51,7 +49,6 @@ TICKET_IMAGE_URL = (
     "hm=4f17e0415ac169cff6678786b0e22a60bb75242fa195d643132433567e161368"
 )
 
-# صورة اللوق
 LOG_IMAGE_URL = PANEL_IMAGE_URL
 
 
@@ -108,7 +105,6 @@ CREATE TABLE IF NOT EXISTS tickets (
 )
 """)
 
-
 db.commit()
 
 
@@ -116,11 +112,7 @@ db.commit()
 # DATABASE MIGRATION
 # =========================================================
 
-def ensure_column(
-    table,
-    column,
-    definition
-):
+def ensure_column(table, column, definition):
     columns = db.execute(
         f"PRAGMA table_info({table})"
     ).fetchall()
@@ -141,59 +133,15 @@ def ensure_column(
         db.commit()
 
 
-ensure_column(
-    "tickets",
-    "claimed_at",
-    "TEXT"
-)
-
-ensure_column(
-    "tickets",
-    "close_requested_by",
-    "INTEGER"
-)
-
-ensure_column(
-    "tickets",
-    "close_requested_at",
-    "TEXT"
-)
-
-ensure_column(
-    "tickets",
-    "closed_by",
-    "INTEGER"
-)
-
-ensure_column(
-    "tickets",
-    "closed_at",
-    "TEXT"
-)
-
-ensure_column(
-    "tickets",
-    "message_count",
-    "INTEGER DEFAULT 0"
-)
-
-ensure_column(
-    "tickets",
-    "rating",
-    "INTEGER"
-)
-
-ensure_column(
-    "tickets",
-    "rating_note",
-    "TEXT"
-)
-
-ensure_column(
-    "tickets",
-    "log_message_id",
-    "INTEGER"
-)
+ensure_column("tickets", "claimed_at", "TEXT")
+ensure_column("tickets", "close_requested_by", "INTEGER")
+ensure_column("tickets", "close_requested_at", "TEXT")
+ensure_column("tickets", "closed_by", "INTEGER")
+ensure_column("tickets", "closed_at", "TEXT")
+ensure_column("tickets", "message_count", "INTEGER DEFAULT 0")
+ensure_column("tickets", "rating", "INTEGER")
+ensure_column("tickets", "rating_note", "TEXT")
+ensure_column("tickets", "log_message_id", "INTEGER")
 
 
 # =========================================================
@@ -213,9 +161,7 @@ bot = commands.Bot(
 # =========================================================
 
 def now():
-    return datetime.now(
-        timezone.utc
-    )
+    return datetime.now(timezone.utc)
 
 
 def now_text():
@@ -224,9 +170,7 @@ def now_text():
     )
 
 
-def get_ticket(
-    channel_id
-):
+def get_ticket(channel_id):
     return db.execute(
         """
         SELECT *
@@ -237,10 +181,7 @@ def get_ticket(
     ).fetchone()
 
 
-def get_open_ticket(
-    guild_id,
-    user_id
-):
+def get_open_ticket(guild_id, user_id):
     return db.execute(
         """
         SELECT *
@@ -257,10 +198,7 @@ def get_open_ticket(
     ).fetchone()
 
 
-def update_ticket(
-    channel_id,
-    **values
-):
+def update_ticket(channel_id, **values):
     if not values:
         return
 
@@ -273,9 +211,7 @@ def update_ticket(
         values.values()
     )
 
-    params.append(
-        channel_id
-    )
+    params.append(channel_id)
 
     db.execute(
         f"""
@@ -289,9 +225,7 @@ def update_ticket(
     db.commit()
 
 
-def get_next_ticket_number(
-    guild_id
-):
+def get_next_ticket_number(guild_id):
     row = db.execute(
         """
         SELECT number
@@ -302,7 +236,6 @@ def get_next_ticket_number(
     ).fetchone()
 
     if row is None:
-
         number = 1
 
         db.execute(
@@ -318,7 +251,6 @@ def get_next_ticket_number(
         )
 
     else:
-
         number = row["number"] + 1
 
         db.execute(
@@ -338,9 +270,7 @@ def get_next_ticket_number(
     return number
 
 
-def clean_username(
-    username
-):
+def clean_username(username):
     username = "".join(
         char
         if char.isalnum()
@@ -354,19 +284,14 @@ def clean_username(
     return username or "user"
 
 
-def make_channel_name(
-    number,
-    username
-):
+def make_channel_name(number, username):
     return (
         f"ticket-{number:03d}・"
         f"{clean_username(username)[:50]}"
     )
 
 
-def type_name(
-    ticket_type
-):
+def type_name(ticket_type):
     names = {
         "support": "دعم واستفسار",
         "complaint": "شكوى",
@@ -379,13 +304,8 @@ def type_name(
     )
 
 
-def is_support(
-    member
-):
-    if not isinstance(
-        member,
-        discord.Member
-    ):
+def is_support(member):
+    if not isinstance(member, discord.Member):
         return False
 
     return any(
@@ -394,13 +314,11 @@ def is_support(
     )
 
 
-def format_user(
-    guild,
-    user_id
-):
-    member = guild.get_member(
-        user_id
-    )
+def format_user(guild, user_id):
+    if not user_id:
+        return "غير محدد"
+
+    member = guild.get_member(user_id)
 
     if member:
         return (
@@ -411,19 +329,11 @@ def format_user(
     return f"`{user_id}`"
 
 
-def format_date(
-    value
-):
-    if not value:
-        return "غير محدد"
-
-    return value
+def format_date(value):
+    return value or "غير محدد"
 
 
-def calculate_duration(
-    created_at,
-    closed_at
-):
+def calculate_duration(created_at, closed_at):
     if not created_at or not closed_at:
         return "غير محددة"
 
@@ -465,10 +375,7 @@ def calculate_duration(
         return "غير محددة"
 
 
-def base_embed(
-    title,
-    description=None
-):
+def base_embed(title, description=None):
     embed = discord.Embed(
         title=title,
         description=description,
@@ -490,9 +397,7 @@ def base_embed(
 # LOG CHANNEL
 # =========================================================
 
-async def get_log_channel(
-    guild
-):
+async def get_log_channel(guild):
     channel = guild.get_channel(
         LOG_CHANNEL_ID
     )
@@ -512,9 +417,7 @@ async def get_log_channel(
 # TRANSCRIPT
 # =========================================================
 
-async def create_transcript(
-    channel
-):
+async def create_transcript(channel):
     ticket = get_ticket(
         channel.id
     )
@@ -533,43 +436,47 @@ async def create_transcript(
     )
 
     lines.append(
-        f"Ticket Number: #{ticket['ticket_number']:03d}"
+        f"Ticket Number : #{ticket['ticket_number']:03d}"
     )
 
     lines.append(
-        f"Channel: {channel.name}"
+        f"Channel       : {channel.name}"
     )
 
     lines.append(
-        f"Owner: {ticket['username']}"
+        f"Channel ID    : {channel.id}"
     )
 
     lines.append(
-        f"Owner ID: {ticket['user_id']}"
+        f"Owner         : {ticket['username']}"
     )
 
     lines.append(
-        f"Type: {type_name(ticket['ticket_type'])}"
+        f"Owner ID      : {ticket['user_id']}"
     )
 
     lines.append(
-        f"Created: {ticket['created_at']}"
+        f"Type          : {type_name(ticket['ticket_type'])}"
     )
 
     lines.append(
-        f"Claimed By: {ticket['claimed_by'] or 'None'}"
+        f"Created       : {ticket['created_at']}"
     )
 
     lines.append(
-        f"Claimed At: {ticket['claimed_at'] or 'None'}"
+        f"Claimed By    : {ticket['claimed_by'] or 'None'}"
     )
 
     lines.append(
-        f"Closed By: {ticket['closed_by'] or 'None'}"
+        f"Claimed At    : {ticket['claimed_at'] or 'None'}"
     )
 
     lines.append(
-        f"Closed At: {ticket['closed_at'] or 'None'}"
+        f"Closed By     : {ticket['closed_by'] or 'None'}"
+    )
+
+    lines.append(
+        f"Closed At     : {ticket['closed_at'] or 'None'}"
     )
 
     lines.append(
@@ -599,7 +506,6 @@ async def create_transcript(
             )
 
         if message.attachments:
-
             for attachment in message.attachments:
                 lines.append(
                     f"Attachment: {attachment.url}"
@@ -632,24 +538,20 @@ async def create_transcript(
 
 
 # =========================================================
-# FINAL LOG EMBED
+# FINAL LOG
 # =========================================================
 
-def build_final_log(
-    guild,
-    ticket
-):
+def build_final_log(guild, ticket):
     embed = base_embed(
-        f"Ticket #{ticket['ticket_number']:03d}・"
-        f"{ticket['username']}"
+        f"R7L・Ticket #{ticket['ticket_number']:03d}"
     )
 
     embed.description = (
-        "تم إغلاق التكت وتسجيل جميع بياناته."
+        "تم إغلاق التكت وتسجيل بياناته بالكامل."
     )
 
     embed.add_field(
-        name="صاحب التكت",
+        name="👤 صاحب التكت",
         value=format_user(
             guild,
             ticket["user_id"]
@@ -658,7 +560,7 @@ def build_final_log(
     )
 
     embed.add_field(
-        name="نوع التكت",
+        name="🎫 نوع التكت",
         value=type_name(
             ticket["ticket_type"]
         ),
@@ -666,29 +568,37 @@ def build_final_log(
     )
 
     embed.add_field(
-        name="الحالة",
-        value="Closed",
+        name="📌 الحالة",
+        value="`CLOSED`",
         inline=True
     )
 
     embed.add_field(
-        name="وقت الإنشاء",
-        value=format_date(
-            ticket["created_at"]
-        ),
+        name="🆔 رقم التكت",
+        value=f"`#{ticket['ticket_number']:03d}`",
         inline=True
     )
 
     embed.add_field(
-        name="وقت الاستلام",
-        value=format_date(
-            ticket["claimed_at"]
-        ),
+        name="📁 Channel ID",
+        value=f"`{ticket['channel_id']}`",
         inline=True
     )
 
     embed.add_field(
-        name="المستلم",
+        name="💬 عدد الرسائل",
+        value=f"`{ticket['message_count'] or 0}`",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🕐 وقت الإنشاء",
+        value=f"`{format_date(ticket['created_at'])}`",
+        inline=False
+    )
+
+    embed.add_field(
+        name="📥 المستلم",
         value=(
             format_user(
                 guild,
@@ -701,7 +611,19 @@ def build_final_log(
     )
 
     embed.add_field(
-        name="طلب الإغلاق بواسطة",
+        name="🕐 وقت الاستلام",
+        value=f"`{format_date(ticket['claimed_at'])}`",
+        inline=True
+    )
+
+    embed.add_field(
+        name="⏱️ مدة التكت",
+        value=f"`{calculate_duration(ticket['created_at'], ticket['closed_at'])}`",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🔒 طلب الإغلاق بواسطة",
         value=(
             format_user(
                 guild,
@@ -714,15 +636,13 @@ def build_final_log(
     )
 
     embed.add_field(
-        name="وقت طلب الإغلاق",
-        value=format_date(
-            ticket["close_requested_at"]
-        ),
+        name="🕐 وقت طلب الإغلاق",
+        value=f"`{format_date(ticket['close_requested_at'])}`",
         inline=True
     )
 
     embed.add_field(
-        name="أغلق التكت",
+        name="🔐 أغلق التكت",
         value=(
             format_user(
                 guild,
@@ -735,68 +655,32 @@ def build_final_log(
     )
 
     embed.add_field(
-        name="وقت الإغلاق",
-        value=format_date(
-            ticket["closed_at"]
-        ),
+        name="🕐 وقت الإغلاق",
+        value=f"`{format_date(ticket['closed_at'])}`",
         inline=True
     )
 
-    embed.add_field(
-        name="مدة التكت",
-        value=calculate_duration(
-            ticket["created_at"],
-            ticket["closed_at"]
-        ),
-        inline=True
+    rating = (
+        f"{ticket['rating']}/5"
+        if ticket["rating"]
+        else "بانتظار التقييم"
     )
 
     embed.add_field(
-        name="عدد الرسائل",
-        value=str(
-            ticket["message_count"]
-            or 0
-        ),
+        name="⭐ التقييم",
+        value=f"`{rating}`",
         inline=True
     )
 
-    if ticket["rating"]:
-
-        rating_text = (
-            f"{ticket['rating']}/5"
-        )
-
-    else:
-
-        rating_text = (
-            "بانتظار التقييم"
-        )
+    note = ticket["rating_note"] or "بانتظار التقييم"
 
     embed.add_field(
-        name="التقييم",
-        value=rating_text,
-        inline=True
-    )
-
-    note = ticket["rating_note"]
-
-    if not note:
-        note = "بانتظار التقييم"
-
-    embed.add_field(
-        name="ملاحظة العضو",
+        name="📝 ملاحظة العضو",
         value=note[:1024],
         inline=False
     )
 
-    embed.add_field(
-        name="Channel ID",
-        value=f"`{ticket['channel_id']}`",
-        inline=True
-    )
-
     if LOG_IMAGE_URL:
-
         embed.set_thumbnail(
             url=LOG_IMAGE_URL
         )
@@ -805,10 +689,6 @@ def build_final_log(
 
     return embed
 
-
-# =========================================================
-# SEND FINAL LOG
-# =========================================================
 
 async def send_final_log(
     guild,
@@ -831,16 +711,12 @@ async def send_final_log(
     )
 
     try:
-
         if transcript_file:
-
             message = await log_channel.send(
                 embed=embed,
                 file=transcript_file
             )
-
         else:
-
             message = await log_channel.send(
                 embed=embed
             )
@@ -853,7 +729,6 @@ async def send_final_log(
         return message
 
     except Exception as error:
-
         print(
             "FINAL LOG ERROR:",
             error
@@ -861,10 +736,6 @@ async def send_final_log(
 
         return None
 
-
-# =========================================================
-# UPDATE FINAL LOG
-# =========================================================
 
 async def update_final_log(
     guild,
@@ -881,7 +752,6 @@ async def update_final_log(
         return
 
     try:
-
         message = await log_channel.fetch_message(
             ticket["log_message_id"]
         )
@@ -894,7 +764,6 @@ async def update_final_log(
         )
 
     except Exception as error:
-
         print(
             "LOG UPDATE ERROR:",
             error
@@ -905,14 +774,9 @@ async def update_final_log(
 # RATING
 # =========================================================
 
-class RatingView(
-    discord.ui.View
-):
+class RatingView(discord.ui.View):
 
-    def __init__(
-        self,
-        channel_id
-    ):
+    def __init__(self, channel_id):
         super().__init__(
             timeout=None
         )
@@ -931,33 +795,19 @@ class RatingView(
                 )
             )
 
-            button.callback = (
-                self.rating_callback
-            )
+            button.callback = self.rating_callback
 
             self.add_item(
                 button
             )
 
-    async def rating_callback(
-        self,
-        interaction
-    ):
-        custom_id = interaction.data[
-            "custom_id"
-        ]
+    async def rating_callback(self, interaction):
+        custom_id = interaction.data["custom_id"]
 
-        parts = custom_id.split(
-            ":"
-        )
+        parts = custom_id.split(":")
 
-        channel_id = int(
-            parts[1]
-        )
-
-        rating = int(
-            parts[2]
-        )
+        channel_id = int(parts[1])
+        rating = int(parts[2])
 
         ticket = get_ticket(
             channel_id
@@ -976,7 +826,6 @@ class RatingView(
             )
 
         if ticket["rating"]:
-
             return await interaction.response.send_message(
                 "تم تقييم هذا التكت مسبقًا.",
                 ephemeral=True
@@ -1003,20 +852,13 @@ class RatingModal(
         style=discord.TextStyle.paragraph
     )
 
-    def __init__(
-        self,
-        channel_id,
-        rating
-    ):
+    def __init__(self, channel_id, rating):
         super().__init__()
 
         self.channel_id = channel_id
         self.rating = rating
 
-    async def on_submit(
-        self,
-        interaction
-    ):
+    async def on_submit(self, interaction):
         ticket = get_ticket(
             self.channel_id
         )
@@ -1048,7 +890,6 @@ class RatingModal(
         )
 
         if guild:
-
             await update_final_log(
                 guild,
                 ticket
@@ -1059,26 +900,20 @@ class RatingModal(
             ephemeral=True
         )
 
-        # نجيب القناة قبل حذفها
         channel = None
 
         if guild:
-
             channel = guild.get_channel(
                 self.channel_id
             )
 
-        # إرسال المحادثة للعضو بعد التقييم
         if channel:
-
             try:
-
                 transcript = await create_transcript(
                     channel
                 )
 
                 if transcript:
-
                     await interaction.user.send(
                         content=(
                             "تم إغلاق تكتك.\n"
@@ -1088,38 +923,28 @@ class RatingModal(
                     )
 
             except Exception as error:
-
                 print(
                     "TRANSCRIPT DM ERROR:",
                     error
                 )
 
-        await asyncio.sleep(
-            2
-        )
+        await asyncio.sleep(2)
 
         if channel:
-
             try:
-
                 await channel.delete(
                     reason="R7L Ticket Completed"
                 )
 
             except Exception as error:
-
                 print(
                     "CHANNEL DELETE ERROR:",
                     error
                 )
 
 
-async def send_rating_dm(
-    user,
-    ticket
-):
+async def send_rating_dm(user, ticket):
     try:
-
         embed = base_embed(
             "R7L Support",
             "تم إغلاق تكتك.\n\n"
@@ -1129,10 +954,17 @@ async def send_rating_dm(
         embed.add_field(
             name="Ticket",
             value=(
-                f"#{ticket['ticket_number']:03d}・"
-                f"{ticket['username']}"
+                f"#{ticket['ticket_number']:03d}"
             ),
-            inline=False
+            inline=True
+        )
+
+        embed.add_field(
+            name="Type",
+            value=type_name(
+                ticket["ticket_type"]
+            ),
+            inline=True
         )
 
         await user.send(
@@ -1145,7 +977,6 @@ async def send_rating_dm(
         return True
 
     except Exception as error:
-
         print(
             "RATING DM ERROR:",
             error
@@ -1158,10 +989,7 @@ async def send_rating_dm(
 # CLOSE TICKET
 # =========================================================
 
-async def finish_ticket(
-    channel,
-    closed_by
-):
+async def finish_ticket(channel, closed_by):
     ticket = get_ticket(
         channel.id
     )
@@ -1174,18 +1002,21 @@ async def finish_ticket(
 
     closed_time = now_text()
 
+    closed_by_id = (
+        closed_by.id
+        if hasattr(closed_by, "id")
+        else None
+    )
+
     update_ticket(
         channel.id,
         status="closed",
-        closed_by=closed_by.id
-        if hasattr(closed_by, "id")
-        else None,
+        closed_by=closed_by_id,
         closed_at=closed_time
     )
 
-    # تحديث عدد الرسائل قبل حفظ اللوق
+    # حساب الرسائل
     try:
-
         count = 0
 
         async for _ in channel.history(
@@ -1201,61 +1032,51 @@ async def finish_ticket(
     except Exception:
         pass
 
-    # نأخذ نسخة محدثة
     ticket = get_ticket(
         channel.id
     )
 
-    # إنشاء الـ TXT قبل حذف القناة
+    # حفظ الـ Transcript قبل حذف التكت
     transcript = None
 
     try:
-
         transcript = await create_transcript(
             channel
         )
 
     except Exception as error:
-
         print(
             "TRANSCRIPT ERROR:",
             error
         )
 
-    # اللوق الوحيد للتكت
-    log_message = await send_final_log(
+    # لوق واحد فقط
+    await send_final_log(
         channel.guild,
         ticket,
         transcript
     )
 
-    # نرسل التقييم للعضو
+    # إرسال التقييم للعضو
     member = channel.guild.get_member(
         ticket["user_id"]
     )
 
     if not member:
-
         try:
-
             member = await bot.fetch_user(
                 ticket["user_id"]
             )
-
         except Exception:
-
             member = None
 
     if member:
-
         await send_rating_dm(
             member,
             ticket
         )
 
-    # رسالة بسيطة داخل التكت قبل الإغلاق
     try:
-
         await channel.send(
             embed=base_embed(
                 "Ticket Closed",
@@ -1267,27 +1088,13 @@ async def finish_ticket(
     except Exception:
         pass
 
-    # نعطي Discord وقت بسيط
-    await asyncio.sleep(
-        2
-    )
-
-    # لا نحذف هنا
-    # الحذف يتم بعد التقييم
-    # وإذا لم يقيّم العضو تبقى القناة
-    # حسب النظام المتفق عليه
-
 
 # =========================================================
 # AUTOMATIC CLOSE
 # =========================================================
 
-async def automatic_close(
-    channel_id
-):
-    await asyncio.sleep(
-        180
-    )
+async def automatic_close(channel_id):
+    await asyncio.sleep(180)
 
     ticket = get_ticket(
         channel_id
@@ -1316,25 +1123,15 @@ async def automatic_close(
     if not channel:
         return
 
-    # إذا رد المستلم بعد طلب الإغلاق
-    # يتم إلغاء الإغلاق التلقائي
+    # لو المستلم رد خلال الثلاث دقائق
+    # يتم إلغاء طلب الإغلاق
     claimed_by = ticket["claimed_by"]
 
     if claimed_by:
 
-        last_messages = []
-
-        async for message in channel.history(
-            limit=30
-        ):
-            last_messages.append(
-                message
-            )
-
         requested_time = None
 
         try:
-
             requested_time = datetime.strptime(
                 ticket["close_requested_at"],
                 "%Y-%m-%d %H:%M:%S UTC"
@@ -1347,7 +1144,9 @@ async def automatic_close(
 
         if requested_time:
 
-            for message in last_messages:
+            async for message in channel.history(
+                limit=30
+            ):
 
                 if (
                     message.author.id == claimed_by
@@ -1362,7 +1161,6 @@ async def automatic_close(
                     )
 
                     try:
-
                         await channel.send(
                             embed=base_embed(
                                 "Close Request Cancelled",
@@ -1375,6 +1173,7 @@ async def automatic_close(
 
                     return
 
+    # لم يرد المستلم
     await finish_ticket(
         channel,
         "Automatic"
@@ -1408,21 +1207,22 @@ class CloseConfirmView(
         )
 
         if not ticket:
-
             return await interaction.response.edit_message(
                 content="التكت غير موجود.",
                 view=None
             )
 
         if ticket["claimed_by"] != interaction.user.id:
-
             return await interaction.response.edit_message(
-                content="فقط الموظف المستلم يستطيع إغلاق التكت.",
+                content=(
+                    "فقط الموظف المستلم "
+                    "يستطيع إغلاق التكت."
+                ),
                 view=None
             )
 
         await interaction.response.edit_message(
-            content="جاري إنهاء التكت...",
+            content="جاري إغلاق التكت...",
             view=None
         )
 
@@ -1460,7 +1260,7 @@ class TicketControlView(
         )
 
     @discord.ui.button(
-        label="Claim",
+        label="استلام",
         style=discord.ButtonStyle.secondary,
         custom_id="r7l_claim"
     )
@@ -1472,7 +1272,6 @@ class TicketControlView(
         if not is_support(
             interaction.user
         ):
-
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
@@ -1483,14 +1282,18 @@ class TicketControlView(
         )
 
         if not ticket:
-
             return await interaction.response.send_message(
                 "التكت غير موجود.",
                 ephemeral=True
             )
 
-        if ticket["claimed_by"]:
+        if ticket["status"] != "open":
+            return await interaction.response.send_message(
+                "التكت مغلق.",
+                ephemeral=True
+            )
 
+        if ticket["claimed_by"]:
             return await interaction.response.send_message(
                 "التكت مستلم بالفعل.",
                 ephemeral=True
@@ -1505,12 +1308,13 @@ class TicketControlView(
         await interaction.response.send_message(
             embed=base_embed(
                 "Ticket Claimed",
-                f"تم استلام التكت بواسطة {interaction.user.mention}."
+                f"تم استلام التكت بواسطة "
+                f"{interaction.user.mention}."
             )
         )
 
     @discord.ui.button(
-        label="Unclaim",
+        label="فك الاستلام",
         style=discord.ButtonStyle.secondary,
         custom_id="r7l_unclaim"
     )
@@ -1522,7 +1326,6 @@ class TicketControlView(
         if not is_support(
             interaction.user
         ):
-
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
@@ -1533,21 +1336,18 @@ class TicketControlView(
         )
 
         if not ticket:
-
             return await interaction.response.send_message(
                 "التكت غير موجود.",
                 ephemeral=True
             )
 
         if not ticket["claimed_by"]:
-
             return await interaction.response.send_message(
                 "التكت غير مستلم.",
                 ephemeral=True
             )
 
         if ticket["claimed_by"] != interaction.user.id:
-
             return await interaction.response.send_message(
                 "فقط الموظف المستلم يستطيع فك الاستلام.",
                 ephemeral=True
@@ -1581,28 +1381,24 @@ class TicketControlView(
         )
 
         if not ticket:
-
             return await interaction.response.send_message(
                 "التكت غير موجود.",
                 ephemeral=True
             )
 
         if interaction.user.id != ticket["user_id"]:
-
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لصاحب التكت.",
                 ephemeral=True
             )
 
         if not ticket["claimed_by"]:
-
             return await interaction.response.send_message(
                 "يجب استلام التكت أولاً.",
                 ephemeral=True
             )
 
         if ticket["close_requested_at"]:
-
             return await interaction.response.send_message(
                 "تم طلب الإغلاق مسبقًا.",
                 ephemeral=True
@@ -1642,7 +1438,6 @@ class TicketControlView(
         if not is_support(
             interaction.user
         ):
-
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
@@ -1653,21 +1448,18 @@ class TicketControlView(
         )
 
         if not ticket:
-
             return await interaction.response.send_message(
                 "التكت غير موجود.",
                 ephemeral=True
             )
 
         if not ticket["claimed_by"]:
-
             return await interaction.response.send_message(
                 "يجب استلام التكت أولاً.",
                 ephemeral=True
             )
 
         if ticket["claimed_by"] != interaction.user.id:
-
             return await interaction.response.send_message(
                 "فقط الموظف المستلم يستطيع إغلاق التكت.",
                 ephemeral=True
@@ -1784,10 +1576,7 @@ class PartnershipModal(
         )
 
 
-def form_review(
-    title,
-    data
-):
+def form_review(title, data):
     embed = base_embed(
         "مراجعة الطلب",
         "تأكد من البيانات قبل إنشاء التكت."
@@ -1879,7 +1668,6 @@ class FormConfirmView(
             )
 
             if channel:
-
                 return await interaction.response.edit_message(
                     content=(
                         f"لديك تكت مفتوح بالفعل: "
@@ -1985,7 +1773,6 @@ class TicketSelect(
             )
 
             if channel:
-
                 return await interaction.response.send_message(
                     f"لديك تكت مفتوح بالفعل: {channel.mention}",
                     ephemeral=True
@@ -2011,7 +1798,6 @@ class TicketSelect(
             )
 
             if channel:
-
                 await interaction.followup.send(
                     f"تم إنشاء التكت: {channel.mention}",
                     ephemeral=True
@@ -2273,9 +2059,8 @@ async def create_ticket(
 # =========================================================
 
 @bot.event
-async def on_message(
-    message
-):
+async def on_message(message):
+
     if message.author.bot:
         return
 
@@ -2362,6 +2147,7 @@ async def ticket_setup(
     interaction,
     channel: discord.TextChannel
 ):
+
     if interaction.user.id != BOT_OWNER_ID:
 
         return await interaction.response.send_message(
@@ -2407,17 +2193,51 @@ async def ticket_setup(
 async def on_ready():
 
     print(
-        f"R7L SYSTEM V3 ONLINE AS {bot.user}"
+        f"R7L TICKET SYSTEM ONLINE AS {bot.user}"
     )
 
+    # لوحة التكت
     bot.add_view(
         TicketPanelView()
     )
 
+    # أزرار التكتات
     bot.add_view(
         TicketControlView()
     )
 
+    # استرجاع أزرار التقييم بعد إعادة تشغيل البوت
+    try:
+
+        pending_ratings = db.execute(
+            """
+            SELECT channel_id
+            FROM tickets
+            WHERE status = 'closed'
+            AND rating IS NULL
+            """
+        ).fetchall()
+
+        for row in pending_ratings:
+
+            bot.add_view(
+                RatingView(
+                    row["channel_id"]
+                )
+            )
+
+        print(
+            f"Restored {len(pending_ratings)} rating views."
+        )
+
+    except Exception as error:
+
+        print(
+            "RATING VIEW RESTORE ERROR:",
+            error
+        )
+
+    # مزامنة الأمر الوحيد
     try:
 
         guild = discord.Object(
@@ -2433,7 +2253,7 @@ async def on_ready():
         )
 
         print(
-            "R7L slash commands synced."
+            "R7L ticket command synced."
         )
 
     except Exception as error:

@@ -5,7 +5,7 @@ import os
 import sqlite3
 import asyncio
 import io
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 # =========================================================
@@ -145,12 +145,20 @@ def update_ticket(channel_id: int, **values):
     if not values:
         return
 
-    fields = ", ".join(f"{key} = ?" for key in values.keys())
+    fields = ", ".join(
+        f"{key} = ?"
+        for key in values.keys()
+    )
+
     params = list(values.values())
     params.append(channel_id)
 
     db.execute(
-        f"UPDATE tickets SET {fields} WHERE channel_id = ?",
+        f"""
+        UPDATE tickets
+        SET {fields}
+        WHERE channel_id = ?
+        """,
         params
     )
 
@@ -161,10 +169,6 @@ def update_ticket(channel_id: int, **values):
 # HELPERS
 # =========================================================
 
-def is_owner(user_id: int):
-    return user_id == OWNER_ID
-
-
 def is_support(member: discord.Member):
     return any(
         role.id in SUPPORT_ROLE_IDS
@@ -173,7 +177,11 @@ def is_support(member: discord.Member):
 
 
 def clean_username(username: str):
-    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+    allowed = (
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "0123456789-_"
+    )
 
     cleaned = "".join(
         char if char in allowed else "-"
@@ -185,38 +193,45 @@ def clean_username(username: str):
     if not cleaned:
         cleaned = "user"
 
-    return cleaned[:70]
+    return cleaned[:60]
 
 
 def get_ticket_type_name(ticket_type: str):
     names = {
-        "support": "دعم",
+        "support": "دعم واستفسار",
         "complaint": "شكوى",
         "partnership": "شراكة"
     }
 
-    return names.get(ticket_type, ticket_type)
+    return names.get(
+        ticket_type,
+        ticket_type
+    )
 
 
-def black_embed(title=None, description=None):
-    embed = discord.Embed(
+def black_embed(
+    title=None,
+    description=None
+):
+    return discord.Embed(
         title=title,
         description=description,
         color=discord.Color.from_rgb(0, 0, 0)
     )
 
-    return embed
-
 
 async def get_log_channel(guild: discord.Guild):
-    channel = guild.get_channel(LOG_CHANNEL_ID)
+    channel = guild.get_channel(
+        LOG_CHANNEL_ID
+    )
 
     if channel:
         return channel
 
     try:
-        channel = await guild.fetch_channel(LOG_CHANNEL_ID)
-        return channel
+        return await guild.fetch_channel(
+            LOG_CHANNEL_ID
+        )
     except Exception:
         return None
 
@@ -225,92 +240,194 @@ async def get_log_channel(guild: discord.Guild):
 # TRANSCRIPT
 # =========================================================
 
-async def create_transcript(channel: discord.TextChannel):
+async def create_transcript(
+    channel: discord.TextChannel
+):
     lines = []
 
-    ticket = get_ticket(channel.id)
+    ticket = get_ticket(
+        channel.id
+    )
 
     lines.append("R7L TICKET TRANSCRIPT")
-    lines.append("=" * 60)
+    lines.append("=" * 70)
     lines.append("")
 
     if ticket:
-        lines.append(f"Ticket: ticket-{ticket['ticket_number']:03d}・{ticket['username']}")
-        lines.append(f"Type: {get_ticket_type_name(ticket['ticket_type'])}")
-        lines.append(f"Owner: {ticket['username']}")
         lines.append(
-            f"Claimed By: {ticket['claimed_by'] if ticket['claimed_by'] else 'None'}"
+            f"Ticket: ticket-{ticket['ticket_number']:03d}・"
+            f"{ticket['username']}"
         )
-        lines.append(f"Created: {ticket['created_at']}")
-        lines.append(f"Closed: {ticket['closed_at'] or 'Unknown'}")
-
-    lines.append("")
-    lines.append("=" * 60)
-    lines.append("")
-
-    async for message in channel.history(limit=None, oldest_first=True):
-        timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
 
         lines.append(
-            f"[{timestamp}] {message.author} ({message.author.id})"
+            f"Type: {get_ticket_type_name(ticket['ticket_type'])}"
+        )
+
+        lines.append(
+            f"Owner: {ticket['username']} "
+            f"({ticket['user_id']})"
+        )
+
+        lines.append(
+            "Claimed By: "
+            + (
+                str(ticket["claimed_by"])
+                if ticket["claimed_by"]
+                else "None"
+            )
+        )
+
+        lines.append(
+            f"Created: {ticket['created_at']}"
+        )
+
+        lines.append(
+            f"Closed: {ticket['closed_at'] or 'Unknown'}"
+        )
+
+    lines.append("")
+    lines.append("=" * 70)
+    lines.append("")
+
+    async for message in channel.history(
+        limit=None,
+        oldest_first=True
+    ):
+        timestamp = message.created_at.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        lines.append(
+            f"[{timestamp}] "
+            f"{message.author} "
+            f"({message.author.id})"
         )
 
         if message.content:
-            lines.append(message.content)
+            lines.append(
+                message.content
+            )
 
-        if message.attachments:
-            for attachment in message.attachments:
-                lines.append(f"Attachment: {attachment.url}")
+        for attachment in message.attachments:
+            lines.append(
+                f"Attachment: {attachment.url}"
+            )
 
         if message.embeds:
             lines.append(
                 f"Embeds: {len(message.embeds)}"
             )
 
-        lines.append("-" * 60)
+        lines.append("-" * 70)
 
-    content = "\n".join(lines)
-
-    return io.BytesIO(content.encode("utf-8"))
+    return io.BytesIO(
+        "\n".join(lines).encode("utf-8")
+    )
 
 
 # =========================================================
-# RATING SYSTEM
+# SEND TRANSCRIPT
+# =========================================================
+
+async def send_transcript_to_user(
+    user: discord.User,
+    ticket_data
+):
+    guild = client.get_guild(
+        ticket_data["guild_id"]
+    )
+
+    if not guild:
+        return False
+
+    channel = guild.get_channel(
+        ticket_data["channel_id"]
+    )
+
+    if not channel:
+        return False
+
+    try:
+        transcript = await create_transcript(
+            channel
+        )
+
+        transcript.seek(0)
+
+        filename = (
+            f"ticket-{ticket_data['ticket_number']:03d}-"
+            f"{clean_username(ticket_data['username'])}.txt"
+        )
+
+        file = discord.File(
+            transcript,
+            filename=filename
+        )
+
+        await user.send(
+            content="نسخة من محادثة التكت:",
+            file=file
+        )
+
+        return True
+
+    except Exception as error:
+        print(
+            f"Transcript DM Error: {error}"
+        )
+        return False
+
+
+# =========================================================
+# RATING
 # =========================================================
 
 class RatingView(discord.ui.View):
+
     def __init__(self, ticket_data):
-        super().__init__(timeout=3600)
+        super().__init__(
+            timeout=3600
+        )
 
         self.ticket_data = ticket_data
-        self.rating = None
 
         for number in range(1, 6):
+
             button = discord.ui.Button(
                 label=str(number),
                 style=discord.ButtonStyle.secondary,
-                custom_id=f"rating_{number}_{ticket_data['channel_id']}"
+                custom_id=(
+                    f"rating_{number}_"
+                    f"{ticket_data['channel_id']}"
+                )
             )
 
-            button.callback = self.make_callback(number)
+            button.callback = (
+                self.make_callback(number)
+            )
+
             self.add_item(button)
 
     def make_callback(self, number):
-        async def callback(interaction: discord.Interaction):
-            self.rating = number
 
+        async def callback(
+            interaction: discord.Interaction
+        ):
             await interaction.response.send_modal(
                 RatingNoteModal(
                     self.ticket_data,
-                    number,
-                    self
+                    number
                 )
             )
 
         return callback
 
 
-class RatingNoteModal(discord.ui.Modal, title="ملاحظة التقييم"):
+class RatingNoteModal(
+    discord.ui.Modal,
+    title="ملاحظة التقييم"
+):
+
     note = discord.ui.TextInput(
         label="هل لديك ملاحظة؟",
         placeholder="اكتب ملاحظتك أو اتركها فارغة",
@@ -319,22 +436,32 @@ class RatingNoteModal(discord.ui.Modal, title="ملاحظة التقييم"):
         style=discord.TextStyle.paragraph
     )
 
-    def __init__(self, ticket_data, rating, rating_view):
+    def __init__(
+        self,
+        ticket_data,
+        rating
+    ):
         super().__init__()
 
         self.ticket_data = ticket_data
         self.rating = rating
-        self.rating_view = rating_view
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
         note = self.note.value.strip()
 
-        guild = client.get_guild(self.ticket_data["guild_id"])
+        guild = client.get_guild(
+            self.ticket_data["guild_id"]
+        )
 
         log_channel = None
 
         if guild:
-            log_channel = await get_log_channel(guild)
+            log_channel = await get_log_channel(
+                guild
+            )
 
         embed = black_embed(
             title="Ticket Rating",
@@ -343,13 +470,19 @@ class RatingNoteModal(discord.ui.Modal, title="ملاحظة التقييم"):
 
         embed.add_field(
             name="Ticket",
-            value=f"ticket-{self.ticket_data['ticket_number']:03d}・{self.ticket_data['username']}",
+            value=(
+                f"ticket-"
+                f"{self.ticket_data['ticket_number']:03d}"
+                f"・{self.ticket_data['username']}"
+            ),
             inline=False
         )
 
         embed.add_field(
             name="Type",
-            value=get_ticket_type_name(self.ticket_data["ticket_type"]),
+            value=get_ticket_type_name(
+                self.ticket_data["ticket_type"]
+            ),
             inline=True
         )
 
@@ -377,7 +510,9 @@ class RatingNoteModal(discord.ui.Modal, title="ملاحظة التقييم"):
 
         if log_channel:
             try:
-                await log_channel.send(embed=embed)
+                await log_channel.send(
+                    embed=embed
+                )
             except Exception:
                 pass
 
@@ -393,20 +528,24 @@ class RatingNoteModal(discord.ui.Modal, title="ملاحظة التقييم"):
 
         await asyncio.sleep(2)
 
-        channel = guild.get_channel(
-            self.ticket_data["channel_id"]
-        ) if guild else None
+        if guild:
+            channel = guild.get_channel(
+                self.ticket_data["channel_id"]
+            )
 
-        if channel:
-            try:
-                await channel.delete(
-                    reason="Ticket closed and rating completed"
-                )
-            except Exception:
-                pass
+            if channel:
+                try:
+                    await channel.delete(
+                        reason="Ticket rating completed"
+                    )
+                except Exception:
+                    pass
 
 
-async def send_rating_dm(user: discord.User, ticket_data):
+async def send_rating_dm(
+    user: discord.User,
+    ticket_data
+):
     try:
         embed = black_embed(
             title="Ticket Rating",
@@ -418,62 +557,42 @@ async def send_rating_dm(user: discord.User, ticket_data):
 
         embed.add_field(
             name="Ticket",
-            value=f"ticket-{ticket_data['ticket_number']:03d}・{ticket_data['username']}",
+            value=(
+                f"ticket-"
+                f"{ticket_data['ticket_number']:03d}"
+                f"・{ticket_data['username']}"
+            ),
             inline=False
         )
 
         await user.send(
             embed=embed,
-            view=RatingView(ticket_data)
-        )
-
-        return True
-
-    except Exception:
-        return False
-
-
-async def send_transcript_to_user(user: discord.User, ticket_data):
-    guild = client.get_guild(ticket_data["guild_id"])
-
-    if not guild:
-        return False
-
-    channel = guild.get_channel(ticket_data["channel_id"])
-
-    if not channel:
-        return False
-
-    try:
-        transcript = await create_transcript(channel)
-
-        transcript.seek(0)
-
-        file = discord.File(
-            transcript,
-            filename=(
-                f"ticket-{ticket_data['ticket_number']:03d}"
-                f"-{clean_username(ticket_data['username'])}.txt"
+            view=RatingView(
+                ticket_data
             )
         )
 
-        await user.send(
-            content="نسخة من محادثة التكت:",
-            file=file
-        )
-
         return True
 
-    except Exception:
+    except Exception as error:
+        print(
+            f"Rating DM Error: {error}"
+        )
         return False
 
 
 # =========================================================
-# CLOSE SYSTEM
+# CLOSE REQUEST TIMER
 # =========================================================
 
-async def close_ticket(channel: discord.TextChannel, closed_by=None):
-    ticket = get_ticket(channel.id)
+async def close_request_timer(
+    channel_id: int
+):
+    await asyncio.sleep(180)
+
+    ticket = get_ticket(
+        channel_id
+    )
 
     if not ticket:
         return
@@ -481,7 +600,50 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
     if ticket["status"] != "open":
         return
 
-    closed_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    if not ticket["close_requested_at"]:
+        return
+
+    guild = client.get_guild(
+        ticket["guild_id"]
+    )
+
+    if not guild:
+        return
+
+    channel = guild.get_channel(
+        channel_id
+    )
+
+    if not channel:
+        return
+
+    await close_ticket(
+        channel,
+        closed_by=None
+    )
+
+
+# =========================================================
+# CLOSE TICKET
+# =========================================================
+
+async def close_ticket(
+    channel: discord.TextChannel,
+    closed_by=None
+):
+    ticket = get_ticket(
+        channel.id
+    )
+
+    if not ticket:
+        return
+
+    if ticket["status"] != "open":
+        return
+
+    closed_at = datetime.utcnow().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
     update_ticket(
         channel.id,
@@ -508,7 +670,9 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
             )
 
         for role_id in SUPPORT_ROLE_IDS:
-            role = channel.guild.get_role(role_id)
+            role = channel.guild.get_role(
+                role_id
+            )
 
             if role:
                 await channel.set_permissions(
@@ -533,14 +697,21 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
                 inline=False
             )
 
-        await channel.send(embed=embed)
+        await channel.send(
+            embed=embed
+        )
 
-    except Exception:
-        pass
+    except Exception as error:
+        print(
+            f"Close Channel Error: {error}"
+        )
 
-    log_channel = await get_log_channel(channel.guild)
+    log_channel = await get_log_channel(
+        channel.guild
+    )
 
     if log_channel:
+
         log_embed = black_embed(
             title="Ticket Closed",
             description="تم إغلاق تذكرة."
@@ -548,13 +719,19 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
 
         log_embed.add_field(
             name="Ticket",
-            value=f"ticket-{ticket['ticket_number']:03d}・{ticket['username']}",
+            value=(
+                f"ticket-"
+                f"{ticket['ticket_number']:03d}"
+                f"・{ticket['username']}"
+            ),
             inline=False
         )
 
         log_embed.add_field(
             name="Type",
-            value=get_ticket_type_name(ticket["ticket_type"]),
+            value=get_ticket_type_name(
+                ticket["ticket_type"]
+            ),
             inline=True
         )
 
@@ -576,28 +753,38 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
             )
 
         try:
-            await log_channel.send(embed=log_embed)
+            await log_channel.send(
+                embed=log_embed
+            )
         except Exception:
             pass
 
-    user = channel.guild.get_member(ticket["user_id"])
+    user = channel.guild.get_member(
+        ticket["user_id"]
+    )
 
     if not user:
         try:
-            user = await client.fetch_user(ticket["user_id"])
+            user = await client.fetch_user(
+                ticket["user_id"]
+            )
         except Exception:
             user = None
 
     if user:
+        updated_ticket = get_ticket(
+            channel.id
+        )
+
         sent = await send_rating_dm(
             user,
-            get_ticket(channel.id)
+            updated_ticket
         )
 
         if not sent:
             try:
                 await channel.send(
-                    "تعذر إرسال التقييم إلى الخاص. سيتم حفظ التكت في اللوق."
+                    "تعذر إرسال التقييم إلى الخاص. سيتم حذف التكت."
                 )
 
                 await asyncio.sleep(10)
@@ -611,67 +798,43 @@ async def close_ticket(channel: discord.TextChannel, closed_by=None):
 
 
 # =========================================================
-# AUTO CLOSE AFTER 3 MINUTES
-# =========================================================
-
-async def close_request_timer(channel_id: int):
-    await asyncio.sleep(180)
-
-    ticket = get_ticket(channel_id)
-
-    if not ticket:
-        return
-
-    if ticket["status"] != "open":
-        return
-
-    if not ticket["close_requested_at"]:
-        return
-
-    guild = client.get_guild(ticket["guild_id"])
-
-    if not guild:
-        return
-
-    channel = guild.get_channel(channel_id)
-
-    if not channel:
-        return
-
-    await close_ticket(
-        channel,
-        closed_by=None
-    )
-
-
-# =========================================================
 # TICKET BUTTONS
 # =========================================================
 
 class TicketView(discord.ui.View):
+
     def __init__(self):
-        super().__init__(timeout=None)
+        super().__init__(
+            timeout=None
+        )
 
     @discord.ui.button(
         label="Claim",
         style=discord.ButtonStyle.secondary,
-        custom_id="ticket_claim"
+        custom_id="r7l_ticket_claim"
     )
     async def claim(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        if not isinstance(interaction.user, discord.Member):
+        if not isinstance(
+            interaction.user,
+            discord.Member
+        ):
             return
 
-        if not is_support(interaction.user):
+        if not is_support(
+            interaction.user
+        ):
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
             )
 
-        ticket = get_ticket(interaction.channel.id)
+        ticket = get_ticket(
+            interaction.channel.id
+        )
 
         if not ticket:
             return await interaction.response.send_message(
@@ -699,7 +862,8 @@ class TicketView(discord.ui.View):
         embed = black_embed(
             title="Ticket Claimed",
             description=(
-                f"تم استلام التكت بواسطة {interaction.user.mention}."
+                f"تم استلام التكت بواسطة "
+                f"{interaction.user.mention}."
             )
         )
 
@@ -707,31 +871,33 @@ class TicketView(discord.ui.View):
             embed=embed
         )
 
-        await refresh_ticket_message(
-            interaction.channel,
-            interaction.user
-        )
-
     @discord.ui.button(
         label="Unclaim",
         style=discord.ButtonStyle.secondary,
-        custom_id="ticket_unclaim"
+        custom_id="r7l_ticket_unclaim"
     )
     async def unclaim(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        if not isinstance(interaction.user, discord.Member):
+        if not isinstance(
+            interaction.user,
+            discord.Member
+        ):
             return
 
-        if not is_support(interaction.user):
+        if not is_support(
+            interaction.user
+        ):
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
             )
 
-        ticket = get_ticket(interaction.channel.id)
+        ticket = get_ticket(
+            interaction.channel.id
+        )
 
         if not ticket:
             return await interaction.response.send_message(
@@ -760,22 +926,19 @@ class TicketView(discord.ui.View):
             "تم إلغاء استلام التكت."
         )
 
-        await refresh_ticket_message(
-            interaction.channel,
-            interaction.user
-        )
-
     @discord.ui.button(
         label="طلب إغلاق",
         style=discord.ButtonStyle.secondary,
-        custom_id="ticket_request_close"
+        custom_id="r7l_ticket_request_close"
     )
     async def request_close(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        ticket = get_ticket(interaction.channel.id)
+        ticket = get_ticket(
+            interaction.channel.id
+        )
 
         if not ticket:
             return await interaction.response.send_message(
@@ -801,7 +964,9 @@ class TicketView(discord.ui.View):
                 ephemeral=True
             )
 
-        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.utcnow().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
 
         update_ticket(
             interaction.channel.id,
@@ -815,8 +980,10 @@ class TicketView(discord.ui.View):
         embed = black_embed(
             title="Close Request",
             description=(
-                f"صاحب التكت {interaction.user.mention} طلب إغلاق التكت.\n\n"
-                "إذا لم يتم إغلاق التكت خلال 3 دقائق، سيتم إغلاقه تلقائيًا."
+                f"صاحب التكت {interaction.user.mention} "
+                "طلب إغلاق التكت.\n\n"
+                "إذا لم يتم إغلاق التكت خلال 3 دقائق، "
+                "سيتم إغلاقه تلقائيًا."
             )
         )
 
@@ -832,29 +999,38 @@ class TicketView(discord.ui.View):
         )
 
         asyncio.create_task(
-            close_request_timer(interaction.channel.id)
+            close_request_timer(
+                interaction.channel.id
+            )
         )
 
     @discord.ui.button(
         label="إغلاق",
         style=discord.ButtonStyle.danger,
-        custom_id="ticket_close"
+        custom_id="r7l_ticket_close"
     )
     async def close(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        if not isinstance(interaction.user, discord.Member):
+        if not isinstance(
+            interaction.user,
+            discord.Member
+        ):
             return
 
-        if not is_support(interaction.user):
+        if not is_support(
+            interaction.user
+        ):
             return await interaction.response.send_message(
                 "هذا الخيار مخصص لفريق الدعم.",
                 ephemeral=True
             )
 
-        ticket = get_ticket(interaction.channel.id)
+        ticket = get_ticket(
+            interaction.channel.id
+        )
 
         if not ticket:
             return await interaction.response.send_message(
@@ -881,9 +1057,18 @@ class TicketView(discord.ui.View):
         )
 
 
-class CloseConfirmView(discord.ui.View):
+# =========================================================
+# CLOSE CONFIRMATION
+# =========================================================
+
+class CloseConfirmView(
+    discord.ui.View
+):
+
     def __init__(self):
-        super().__init__(timeout=30)
+        super().__init__(
+            timeout=30
+        )
 
     @discord.ui.button(
         label="تأكيد",
@@ -894,10 +1079,15 @@ class CloseConfirmView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        if not isinstance(interaction.user, discord.Member):
+        if not isinstance(
+            interaction.user,
+            discord.Member
+        ):
             return
 
-        ticket = get_ticket(interaction.channel.id)
+        ticket = get_ticket(
+            interaction.channel.id
+        )
 
         if not ticket:
             return await interaction.response.edit_message(
@@ -937,185 +1127,20 @@ class CloseConfirmView(discord.ui.View):
 
 
 # =========================================================
-# TICKET MESSAGE
+# FORM REVIEW
 # =========================================================
 
-async def refresh_ticket_message(
-    channel: discord.TextChannel,
-    actor=None
+def build_form_review(
+    title,
+    data
 ):
-    ticket = get_ticket(channel.id)
-
-    if not ticket:
-        return
-
-    claimed = "None"
-
-    if ticket["claimed_by"]:
-        member = channel.guild.get_member(
-            ticket["claimed_by"]
-        )
-
-        claimed = member.mention if member else str(
-            ticket["claimed_by"]
-        )
-
-    embed = black_embed(
-        title=f"Ticket #{ticket['ticket_number']:03d}",
-        description=(
-            "يرجى كتابة طلبك بوضوح وسيتم الرد عليك من فريق الدعم."
-        )
-    )
-
-    embed.add_field(
-        name="Type",
-        value=get_ticket_type_name(ticket["ticket_type"]),
-        inline=True
-    )
-
-    embed.add_field(
-        name="Owner",
-        value=f"<@{ticket['user_id']}>",
-        inline=True
-    )
-
-    embed.add_field(
-        name="Claimed By",
-        value=claimed,
-        inline=True
-    )
-
-    embed.add_field(
-        name="Status",
-        value="Open" if ticket["status"] == "open" else "Closed",
-        inline=False
-    )
-
-    try:
-        async for message in channel.history(limit=30):
-            if (
-                message.author.id == client.user.id
-                and message.embeds
-                and message.embeds[0].title
-                and message.embeds[0].title.startswith("Ticket #")
-            ):
-                await message.edit(
-                    embed=embed,
-                    view=TicketView()
-                )
-                return
-    except Exception:
-        pass
-
-
-# =========================================================
-# FORMS
-# =========================================================
-
-class ComplaintModal(discord.ui.Modal, title="شكوى"):
-    target = discord.ui.TextInput(
-        label="على من الشكوى؟",
-        placeholder="اكتب اسم المستخدم",
-        required=True,
-        max_length=100
-    )
-
-    reason = discord.ui.TextInput(
-        label="سبب الشكوى؟",
-        placeholder="اكتب سبب الشكوى باختصار",
-        required=True,
-        max_length=500
-    )
-
-    details = discord.ui.TextInput(
-        label="تفاصيل الشكوى؟",
-        placeholder="اكتب التفاصيل",
-        required=True,
-        max_length=1500,
-        style=discord.TextStyle.paragraph
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        data = {
-            "type": "complaint",
-            "target": self.target.value,
-            "reason": self.reason.value,
-            "details": self.details.value
-        }
-
-        await interaction.response.send_message(
-            "راجع بيانات الشكوى قبل الإرسال:",
-            embed=build_form_review(
-                "شكوى",
-                data
-            ),
-            view=FormConfirmView(
-                "complaint",
-                data
-            ),
-            ephemeral=True
-        )
-
-
-class PartnershipModal(discord.ui.Modal, title="شراكة"):
-    server_name = discord.ui.TextInput(
-        label="اسم السيرفر",
-        placeholder="اسم السيرفر",
-        required=True,
-        max_length=100
-    )
-
-    server_type = discord.ui.TextInput(
-        label="نوعه",
-        placeholder="Community / Gaming / Store ...",
-        required=True,
-        max_length=100
-    )
-
-    invite = discord.ui.TextInput(
-        label="رابطه",
-        placeholder="https://discord.gg/...",
-        required=True,
-        max_length=200
-    )
-
-    members = discord.ui.TextInput(
-        label="كم عدد الي فيه؟",
-        placeholder="مثال: 500",
-        required=True,
-        max_length=20
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        data = {
-            "type": "partnership",
-            "server_name": self.server_name.value,
-            "server_type": self.server_type.value,
-            "invite": self.invite.value,
-            "members": self.members.value
-        }
-
-        await interaction.response.send_message(
-            "راجع بيانات الشراكة قبل الإرسال:",
-            embed=build_form_review(
-                "شراكة",
-                data
-            ),
-            view=FormConfirmView(
-                "partnership",
-                data
-            ),
-            ephemeral=True
-        )
-
-
-def build_form_review(title, data):
     embed = black_embed(
         title="مراجعة الطلب",
         description=f"نوع الطلب: {title}"
     )
 
     if data["type"] == "complaint":
+
         embed.add_field(
             name="على من الشكوى؟",
             value=data["target"],
@@ -1135,6 +1160,7 @@ def build_form_review(title, data):
         )
 
     elif data["type"] == "partnership":
+
         embed.add_field(
             name="اسم السيرفر",
             value=data["server_name"],
@@ -1162,9 +1188,141 @@ def build_form_review(title, data):
     return embed
 
 
-class FormConfirmView(discord.ui.View):
-    def __init__(self, ticket_type, data):
-        super().__init__(timeout=120)
+# =========================================================
+# COMPLAINT MODAL
+# =========================================================
+
+class ComplaintModal(
+    discord.ui.Modal,
+    title="شكوى"
+):
+
+    target = discord.ui.TextInput(
+        label="على من الشكوى؟",
+        placeholder="اكتب اسم المستخدم",
+        required=True,
+        max_length=100
+    )
+
+    reason = discord.ui.TextInput(
+        label="سبب الشكوى؟",
+        placeholder="اكتب السبب باختصار",
+        required=True,
+        max_length=500
+    )
+
+    details = discord.ui.TextInput(
+        label="تفاصيل الشكوى؟",
+        placeholder="اكتب التفاصيل",
+        required=True,
+        max_length=1500,
+        style=discord.TextStyle.paragraph
+    )
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+        data = {
+            "type": "complaint",
+            "target": self.target.value,
+            "reason": self.reason.value,
+            "details": self.details.value
+        }
+
+        await interaction.response.send_message(
+            "راجع بيانات الشكوى قبل الإرسال:",
+            embed=build_form_review(
+                "شكوى",
+                data
+            ),
+            view=FormConfirmView(
+                "complaint",
+                data
+            ),
+            ephemeral=True
+        )
+
+
+# =========================================================
+# PARTNERSHIP MODAL
+# =========================================================
+
+class PartnershipModal(
+    discord.ui.Modal,
+    title="شراكة"
+):
+
+    server_name = discord.ui.TextInput(
+        label="اسم السيرفر",
+        placeholder="اسم السيرفر",
+        required=True,
+        max_length=100
+    )
+
+    server_type = discord.ui.TextInput(
+        label="نوعه",
+        placeholder="Community / Gaming / Store",
+        required=True,
+        max_length=100
+    )
+
+    invite = discord.ui.TextInput(
+        label="رابطه",
+        placeholder="https://discord.gg/...",
+        required=True,
+        max_length=200
+    )
+
+    members = discord.ui.TextInput(
+        label="كم عدد الي فيه؟",
+        placeholder="مثال: 500",
+        required=True,
+        max_length=20
+    )
+
+    async def on_submit(
+        self,
+        interaction: discord.Interaction
+    ):
+        data = {
+            "type": "partnership",
+            "server_name": self.server_name.value,
+            "server_type": self.server_type.value,
+            "invite": self.invite.value,
+            "members": self.members.value
+        }
+
+        await interaction.response.send_message(
+            "راجع بيانات الشراكة قبل الإرسال:",
+            embed=build_form_review(
+                "شراكة",
+                data
+            ),
+            view=FormConfirmView(
+                "partnership",
+                data
+            ),
+            ephemeral=True
+        )
+
+
+# =========================================================
+# FORM CONFIRM
+# =========================================================
+
+class FormConfirmView(
+    discord.ui.View
+):
+
+    def __init__(
+        self,
+        ticket_type,
+        data
+    ):
+        super().__init__(
+            timeout=120
+        )
 
         self.ticket_type = ticket_type
         self.data = data
@@ -1178,7 +1336,9 @@ class FormConfirmView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(
+            ephemeral=True
+        )
 
         channel = await create_ticket(
             interaction,
@@ -1207,33 +1367,41 @@ class FormConfirmView(discord.ui.View):
         button: discord.ui.Button
     ):
         if self.ticket_type == "complaint":
+
             await interaction.response.send_modal(
                 ComplaintModal()
             )
 
         elif self.ticket_type == "partnership":
+
             await interaction.response.send_modal(
                 PartnershipModal()
             )
 
 
 # =========================================================
-# TICKET SELECT MENU
+# TICKET SELECT
 # =========================================================
 
-class TicketSelect(discord.ui.Select):
+class TicketSelect(
+    discord.ui.Select
+):
+
     def __init__(self):
+
         options = [
             discord.SelectOption(
-                label="دعم",
+                label="دعم واستفسار",
                 value="support",
                 description="للاستفسارات والمساعدة"
             ),
+
             discord.SelectOption(
                 label="شكوى",
                 value="complaint",
                 description="لتقديم شكوى"
             ),
+
             discord.SelectOption(
                 label="شراكة",
                 value="partnership",
@@ -1247,7 +1415,10 @@ class TicketSelect(discord.ui.Select):
             custom_id="r7l_ticket_select"
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
         ticket_type = self.values[0]
 
         existing = get_open_ticket(
@@ -1256,6 +1427,7 @@ class TicketSelect(discord.ui.Select):
         )
 
         if existing:
+
             channel = interaction.guild.get_channel(
                 existing["channel_id"]
             )
@@ -1272,7 +1444,10 @@ class TicketSelect(discord.ui.Select):
             )
 
         if ticket_type == "support":
-            await interaction.response.defer(ephemeral=True)
+
+            await interaction.response.defer(
+                ephemeral=True
+            )
 
             channel = await create_ticket(
                 interaction,
@@ -1285,22 +1460,41 @@ class TicketSelect(discord.ui.Select):
                     f"تم إنشاء التكت: {channel.mention}",
                     ephemeral=True
                 )
+            else:
+                await interaction.followup.send(
+                    "تعذر إنشاء التكت.",
+                    ephemeral=True
+                )
 
         elif ticket_type == "complaint":
+
             await interaction.response.send_modal(
                 ComplaintModal()
             )
 
         elif ticket_type == "partnership":
+
             await interaction.response.send_modal(
                 PartnershipModal()
             )
 
 
-class TicketPanelView(discord.ui.View):
+# =========================================================
+# TICKET PANEL
+# =========================================================
+
+class TicketPanelView(
+    discord.ui.View
+):
+
     def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketSelect())
+        super().__init__(
+            timeout=None
+        )
+
+        self.add_item(
+            TicketSelect()
+        )
 
 
 # =========================================================
@@ -1321,6 +1515,7 @@ async def create_ticket(
     )
 
     if existing:
+
         channel = guild.get_channel(
             existing["channel_id"]
         )
@@ -1328,7 +1523,9 @@ async def create_ticket(
         if channel:
             return channel
 
-    category = guild.get_channel(CATEGORY_ID)
+    category = guild.get_channel(
+        CATEGORY_ID
+    )
 
     if not category:
         return None
@@ -1359,9 +1556,13 @@ async def create_ticket(
     }
 
     for role_id in SUPPORT_ROLE_IDS:
-        role = guild.get_role(role_id)
+
+        role = guild.get_role(
+            role_id
+        )
 
         if role:
+
             overwrites[role] = discord.PermissionOverwrite(
                 view_channel=True,
                 send_messages=True,
@@ -1423,7 +1624,9 @@ async def create_ticket(
 
     embed.add_field(
         name="Type",
-        value=get_ticket_type_name(ticket_type),
+        value=get_ticket_type_name(
+            ticket_type
+        ),
         inline=True
     )
 
@@ -1446,7 +1649,9 @@ async def create_ticket(
     )
 
     if form_data:
+
         if ticket_type == "complaint":
+
             embed.add_field(
                 name="على من الشكوى؟",
                 value=form_data["target"],
@@ -1466,6 +1671,7 @@ async def create_ticket(
             )
 
         elif ticket_type == "partnership":
+
             embed.add_field(
                 name="اسم السيرفر",
                 value=form_data["server_name"],
@@ -1496,9 +1702,12 @@ async def create_ticket(
         view=TicketView()
     )
 
-    log_channel = await get_log_channel(guild)
+    log_channel = await get_log_channel(
+        guild
+    )
 
     if log_channel:
+
         log_embed = black_embed(
             title="Ticket Created",
             description="تم إنشاء تكت جديد."
@@ -1506,13 +1715,19 @@ async def create_ticket(
 
         log_embed.add_field(
             name="Ticket",
-            value=f"ticket-{ticket_number:03d}・{user.name}",
+            value=(
+                f"ticket-"
+                f"{ticket_number:03d}"
+                f"・{user.name}"
+            ),
             inline=False
         )
 
         log_embed.add_field(
             name="Type",
-            value=get_ticket_type_name(ticket_type),
+            value=get_ticket_type_name(
+                ticket_type
+            ),
             inline=True
         )
 
@@ -1523,7 +1738,9 @@ async def create_ticket(
         )
 
         try:
-            await log_channel.send(embed=log_embed)
+            await log_channel.send(
+                embed=log_embed
+            )
         except Exception:
             pass
 
@@ -1552,12 +1769,14 @@ async def ticket_setup(
     image_url: str = None
 ):
     if interaction.user.id != OWNER_ID:
+
         return await interaction.response.send_message(
             "هذا الأمر مخصص لمالك البوت فقط.",
             ephemeral=True
         )
 
     if interaction.guild.id != SERVER_ID:
+
         return await interaction.response.send_message(
             "هذا البوت غير مخصص لهذا السيرفر.",
             ephemeral=True
@@ -1573,11 +1792,13 @@ async def ticket_setup(
     ).fetchone()
 
     if existing:
+
         existing_channel = interaction.guild.get_channel(
             existing["panel_channel_id"]
         )
 
         if existing_channel:
+
             return await interaction.response.send_message(
                 f"لوحة التكت موجودة بالفعل في {existing_channel.mention}.",
                 ephemeral=True
@@ -1596,12 +1817,10 @@ async def ticket_setup(
             url=image_url
         )
 
-    await channel.send(
+    message = await channel.send(
         embed=embed,
         view=TicketPanelView()
     )
-
-    message = await channel.history(limit=1).__anext__()
 
     db.execute(
         """
@@ -1639,6 +1858,7 @@ async def ticket_setup(
 
 @client.event
 async def on_ready():
+
     print(
         f"R7L SYSTEM ONLINE AS {client.user}"
     )
@@ -1652,15 +1872,25 @@ async def on_ready():
     )
 
     try:
-        guild = discord.Object(id=SERVER_ID)
+
+        guild = discord.Object(
+            id=SERVER_ID
+        )
+
+        client.tree.copy_global_to(
+            guild=guild
+        )
 
         await client.tree.sync(
             guild=guild
         )
 
-        print("Slash commands synced.")
+        print(
+            "Slash commands synced successfully."
+        )
 
     except Exception as error:
+
         print(
             f"Command sync error: {error}"
         )
@@ -1680,16 +1910,21 @@ async def on_app_command_error(
     )
 
     try:
+
         if interaction.response.is_done():
+
             await interaction.followup.send(
                 "حدث خطأ أثناء تنفيذ الأمر.",
                 ephemeral=True
             )
+
         else:
+
             await interaction.response.send_message(
                 "حدث خطأ أثناء تنفيذ الأمر.",
                 ephemeral=True
             )
+
     except Exception:
         pass
 
@@ -1699,6 +1934,7 @@ async def on_app_command_error(
 # =========================================================
 
 if not TOKEN:
+
     raise RuntimeError(
         "TOKEN environment variable is missing."
     )

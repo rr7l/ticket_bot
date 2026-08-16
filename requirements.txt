@@ -2,3 +2,4 @@ discord.py
 emoji
 Pillow
 requests
+yt-dlp

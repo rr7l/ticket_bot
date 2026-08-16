@@ -236,4 +236,5 @@ async def reomve(interaction: discord.Interaction, member: discord.User):
             await interaction.response.send_message("هذه ليست تذكرة لأزالة عضو", ephemeral=True)
     else:
         await interaction.response.send_message("است لا تملك الصلاحية لأستخدام هذا الامر", ephemeral=True)
-client.run("add_bot_token")
+import os
+client.run(os.getenv("TOKEN"))

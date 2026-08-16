@@ -2195,68 +2195,54 @@ async def on_ready():
         f"R7L TICKET SYSTEM ONLINE AS {bot.user}"
     )
 
-    # لوحة التكت
+    # استعادة الـ Views بعد إعادة تشغيل البوت
     bot.add_view(
         TicketPanelView()
     )
 
-    # أزرار التكتات
     bot.add_view(
         TicketControlView()
     )
 
-    # استرجاع أزرار التقييم بعد إعادة تشغيل البوت
     try:
-
-        pending_ratings = db.execute(
-            """
-            SELECT channel_id
-            FROM tickets
-            WHERE status = 'closed'
-            AND rating IS NULL
-            """
-        ).fetchall()
-
-        for row in pending_ratings:
-
-            bot.add_view(
-                RatingView(
-                    row["channel_id"]
-                )
-            )
-
-        print(
-            f"Restored {len(pending_ratings)} rating views."
-        )
-
-    except Exception as error:
-
-        print(
-            "RATING VIEW RESTORE ERROR:",
-            error
-        )
-
-    # مزامنة الأمر الوحيد
-    try:
-
+        # تسجيل الأوامر للسيرفر الأساسي فقط
         guild = discord.Object(
             id=SERVER_ID
         )
 
+        # حذف أي أوامر Guild قديمة
+        bot.tree.clear_commands(
+            guild=guild
+        )
+
+        # نسخ أوامر البوت الحالية للسيرفر
         bot.tree.copy_global_to(
             guild=guild
         )
 
-        await bot.tree.sync(
+        # مزامنة الأوامر
+        synced = await bot.tree.sync(
             guild=guild
         )
 
         print(
-            "R7L ticket command synced."
+            f"SLASH COMMANDS SYNCED: {len(synced)}"
+        )
+
+        for command in synced:
+            print(
+                f"  /{command.name}"
+            )
+
+    except discord.Forbidden:
+        print(
+            "COMMAND SYNC FAILED: Missing Access"
+        )
+        print(
+            f"Make sure the bot is installed in SERVER_ID: {SERVER_ID}"
         )
 
     except Exception as error:
-
         print(
             "COMMAND SYNC ERROR:",
             error
